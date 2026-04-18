@@ -1,0 +1,425 @@
+{
+  "schemaVersion": 1,
+  "themeIdToName": {
+    "core_system": "Core System",
+    "network_infrastructure": "Network & Infrastructure",
+    "ai_evolution": "AI & Evolution",
+    "glitch_corruption_meta": "Glitch / Corruption / Meta Layer"
+  },
+  "elementIdToName": {
+    "energy": "Energy",
+    "signal": "Signal",
+    "code": "Code",
+    "noise": "Noise",
+    "light": "Light",
+    "time": "Time",
+    "data": "Data",
+    "circuit": "Circuit",
+    "user": "User",
+    "void": "Void",
+    "program": "Program",
+    "error": "Error",
+    "static": "Static",
+    "database": "Database",
+    "system": "System",
+    "display": "Display",
+    "log": "Log",
+    "pulse": "Pulse",
+    "input": "Input",
+    "packet": "Packet",
+    "drop": "Drop",
+    "network": "Network",
+    "internet": "Internet",
+    "transmission": "Transmission",
+    "cloud": "Cloud",
+    "online": "Online",
+    "service": "Service",
+    "exploit": "Exploit",
+    "hack": "Hack",
+    "cyber_attack": "Cyber Attack",
+    "storage": "Storage",
+    "backdoor": "Backdoor",
+    "root_access": "Root Access",
+    "robotic_core": "Robotic Core",
+    "algorithm": "Algorithm",
+    "ai": "AI",
+    "distributed_ai": "Distributed AI",
+    "assistant": "Assistant",
+    "unstable_ai": "Unstable AI",
+    "rogue_ai": "Rogue AI",
+    "takeover": "Takeover",
+    "neural_net": "Neural Net",
+    "learning": "Learning",
+    "super_ai": "Super AI",
+    "digital_soul": "Digital Soul",
+    "glitch": "Glitch",
+    "corruption": "Corruption",
+    "interference": "Interference",
+    "crash": "Crash",
+    "overload": "Overload",
+    "corrupted_file": "Corrupted File",
+    "bug": "Bug",
+    "failure": "Failure",
+    "exception": "Exception",
+    "influencer": "Influencer",
+    "viral_content": "Viral Content",
+    "algorithm_feed": "Algorithm Feed",
+    "addiction": "Addiction",
+    "doomscroll": "Doomscroll",
+    "meme_generator": "Meme Generator",
+    "obsession_exe": "Obsession.exe",
+    "paradox_exe": "Paradox.exe",
+    "singularity": "Singularity",
+    "meme": "Meme",
+    "trend": "Trend",
+    "autopost_bot": "Autopost Bot",
+    "love": "Love"
+  },
+  "elementIdToTheme": {
+    "energy": "core_system",
+    "signal": "core_system",
+    "code": "core_system",
+    "noise": "core_system",
+    "light": "core_system",
+    "time": "core_system",
+    "data": "core_system",
+    "circuit": "core_system",
+    "user": "core_system",
+    "void": "core_system",
+    "program": "core_system",
+    "error": "core_system",
+    "static": "core_system",
+    "database": "core_system",
+    "system": "core_system",
+    "display": "core_system",
+    "log": "core_system",
+    "pulse": "core_system",
+    "input": "network_infrastructure",
+    "packet": "network_infrastructure",
+    "drop": "network_infrastructure",
+    "network": "network_infrastructure",
+    "internet": "network_infrastructure",
+    "transmission": "network_infrastructure",
+    "cloud": "network_infrastructure",
+    "online": "network_infrastructure",
+    "service": "network_infrastructure",
+    "exploit": "network_infrastructure",
+    "hack": "network_infrastructure",
+    "cyber_attack": "network_infrastructure",
+    "storage": "network_infrastructure",
+    "backdoor": "network_infrastructure",
+    "root_access": "network_infrastructure",
+    "robotic_core": "ai_evolution",
+    "algorithm": "ai_evolution",
+    "ai": "ai_evolution",
+    "distributed_ai": "ai_evolution",
+    "assistant": "ai_evolution",
+    "unstable_ai": "ai_evolution",
+    "rogue_ai": "ai_evolution",
+    "takeover": "ai_evolution",
+    "neural_net": "ai_evolution",
+    "learning": "ai_evolution",
+    "super_ai": "ai_evolution",
+    "digital_soul": "ai_evolution",
+    "glitch": "glitch_corruption_meta",
+    "corruption": "glitch_corruption_meta",
+    "interference": "glitch_corruption_meta",
+    "crash": "glitch_corruption_meta",
+    "overload": "glitch_corruption_meta",
+    "corrupted_file": "glitch_corruption_meta",
+    "bug": "glitch_corruption_meta",
+    "failure": "glitch_corruption_meta",
+    "exception": "glitch_corruption_meta",
+    "influencer": "glitch_corruption_meta",
+    "viral_content": "glitch_corruption_meta",
+    "algorithm_feed": "glitch_corruption_meta",
+    "addiction": "glitch_corruption_meta",
+    "doomscroll": "glitch_corruption_meta",
+    "meme_generator": "glitch_corruption_meta",
+    "obsession_exe": "glitch_corruption_meta",
+    "paradox_exe": "glitch_corruption_meta",
+    "singularity": "glitch_corruption_meta",
+    "meme": "glitch_corruption_meta",
+    "trend": "glitch_corruption_meta",
+    "autopost_bot": "glitch_corruption_meta",
+    "love": "glitch_corruption_meta"
+  },
+  "elementsByTheme": {
+    "core_system": [
+      {
+        "id": "energy",
+        "name": "Energy"
+      },
+      {
+        "id": "signal",
+        "name": "Signal"
+      },
+      {
+        "id": "code",
+        "name": "Code"
+      },
+      {
+        "id": "noise",
+        "name": "Noise"
+      },
+      {
+        "id": "light",
+        "name": "Light"
+      },
+      {
+        "id": "time",
+        "name": "Time"
+      },
+      {
+        "id": "data",
+        "name": "Data"
+      },
+      {
+        "id": "circuit",
+        "name": "Circuit"
+      },
+      {
+        "id": "user",
+        "name": "User"
+      },
+      {
+        "id": "void",
+        "name": "Void"
+      },
+      {
+        "id": "program",
+        "name": "Program"
+      },
+      {
+        "id": "error",
+        "name": "Error"
+      },
+      {
+        "id": "static",
+        "name": "Static"
+      },
+      {
+        "id": "database",
+        "name": "Database"
+      },
+      {
+        "id": "system",
+        "name": "System"
+      },
+      {
+        "id": "display",
+        "name": "Display"
+      },
+      {
+        "id": "log",
+        "name": "Log"
+      },
+      {
+        "id": "pulse",
+        "name": "Pulse"
+      }
+    ],
+    "network_infrastructure": [
+      {
+        "id": "input",
+        "name": "Input"
+      },
+      {
+        "id": "packet",
+        "name": "Packet"
+      },
+      {
+        "id": "drop",
+        "name": "Drop"
+      },
+      {
+        "id": "network",
+        "name": "Network"
+      },
+      {
+        "id": "internet",
+        "name": "Internet"
+      },
+      {
+        "id": "transmission",
+        "name": "Transmission"
+      },
+      {
+        "id": "cloud",
+        "name": "Cloud"
+      },
+      {
+        "id": "online",
+        "name": "Online"
+      },
+      {
+        "id": "service",
+        "name": "Service"
+      },
+      {
+        "id": "exploit",
+        "name": "Exploit"
+      },
+      {
+        "id": "hack",
+        "name": "Hack"
+      },
+      {
+        "id": "cyber_attack",
+        "name": "Cyber Attack"
+      },
+      {
+        "id": "storage",
+        "name": "Storage"
+      },
+      {
+        "id": "backdoor",
+        "name": "Backdoor"
+      },
+      {
+        "id": "root_access",
+        "name": "Root Access"
+      }
+    ],
+    "ai_evolution": [
+      {
+        "id": "robotic_core",
+        "name": "Robotic Core"
+      },
+      {
+        "id": "algorithm",
+        "name": "Algorithm"
+      },
+      {
+        "id": "ai",
+        "name": "AI"
+      },
+      {
+        "id": "distributed_ai",
+        "name": "Distributed AI"
+      },
+      {
+        "id": "assistant",
+        "name": "Assistant"
+      },
+      {
+        "id": "unstable_ai",
+        "name": "Unstable AI"
+      },
+      {
+        "id": "rogue_ai",
+        "name": "Rogue AI"
+      },
+      {
+        "id": "takeover",
+        "name": "Takeover"
+      },
+      {
+        "id": "neural_net",
+        "name": "Neural Net"
+      },
+      {
+        "id": "learning",
+        "name": "Learning"
+      },
+      {
+        "id": "super_ai",
+        "name": "Super AI"
+      },
+      {
+        "id": "digital_soul",
+        "name": "Digital Soul"
+      }
+    ],
+    "glitch_corruption_meta": [
+      {
+        "id": "glitch",
+        "name": "Glitch"
+      },
+      {
+        "id": "corruption",
+        "name": "Corruption"
+      },
+      {
+        "id": "interference",
+        "name": "Interference"
+      },
+      {
+        "id": "crash",
+        "name": "Crash"
+      },
+      {
+        "id": "overload",
+        "name": "Overload"
+      },
+      {
+        "id": "corrupted_file",
+        "name": "Corrupted File"
+      },
+      {
+        "id": "bug",
+        "name": "Bug"
+      },
+      {
+        "id": "failure",
+        "name": "Failure"
+      },
+      {
+        "id": "exception",
+        "name": "Exception"
+      },
+      {
+        "id": "influencer",
+        "name": "Influencer"
+      },
+      {
+        "id": "viral_content",
+        "name": "Viral Content"
+      },
+      {
+        "id": "algorithm_feed",
+        "name": "Algorithm Feed"
+      },
+      {
+        "id": "addiction",
+        "name": "Addiction"
+      },
+      {
+        "id": "doomscroll",
+        "name": "Doomscroll"
+      },
+      {
+        "id": "meme_generator",
+        "name": "Meme Generator"
+      },
+      {
+        "id": "obsession_exe",
+        "name": "Obsession.exe"
+      },
+      {
+        "id": "paradox_exe",
+        "name": "Paradox.exe"
+      },
+      {
+        "id": "singularity",
+        "name": "Singularity"
+      },
+      {
+        "id": "meme",
+        "name": "Meme"
+      },
+      {
+        "id": "trend",
+        "name": "Trend"
+      },
+      {
+        "id": "autopost_bot",
+        "name": "Autopost Bot"
+      },
+      {
+        "id": "love",
+        "name": "Love"
+      }
+    ]
+  }
+}

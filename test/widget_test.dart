@@ -1,12 +1,19 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
 import 'package:neon_forge/main.dart';
 
 void main() {
-  testWidgets('shows NEON Forge title', (WidgetTester tester) async {
-    await tester.pumpWidget(const NeonForgeApp());
+  testWidgets('shows forge board on launch', (WidgetTester tester) async {
+    SharedPreferencesAsyncPlatform.instance =
+        InMemorySharedPreferencesAsync.empty();
 
-    expect(find.text('NEON Forge'), findsOneWidget);
-    expect(find.text('Discovered Library'), findsOneWidget);
+    await tester.pumpWidget(const NeonForgeApp());
+    await tester.pumpAndSettle();
+
+    expect(find.text('NEON FORGE'), findsOneWidget);
+    expect(find.text('NEW DISCOVERY'), findsOneWidget);
+    expect(find.text('ROBOTIC CORE'), findsWidgets);
   });
 }

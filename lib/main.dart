@@ -66,6 +66,12 @@ class _ForgeScreenState extends State<ForgeScreen> {
   int _nextInstanceId = 1;
   String? _latestResultId = 'roboticCore';
   String _latestFlavor = 'A pulse of artificial life!';
+  int _activeWorldOrder = 0;
+  String? _currentGoalId;
+  Recipe? _currentGoalRecipe;
+  _MissionPlan? _currentMissionPlan;
+  int _missionComboCount = 0;
+  _BoardSnapshot? _lastSnapshot;
   String? _activeDragId;
   Size? _lastPlayfieldSize;
   AtlasManifest? _atlasManifest;
@@ -83,10 +89,20 @@ class _ForgeScreenState extends State<ForgeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final String activeLayer = _currentLayer();
+    final WorldDefinition activeWorld = _activeWorld;
+    final String activeLayer = activeWorld.layerName;
     final int discoveredCount = _discovered.length;
     final int totalCount = elementCatalog.length;
-    final double progress = discoveredCount / totalCount;
+    final _MissionPlan? missionPlan = _currentMissionPlan;
+    final String? currentGoalId = _currentGoalId;
+    final ElementSpec? currentGoal =
+        currentGoalId == null ? null : elementCatalog[currentGoalId];
+    final int completedInWorld = activeWorld.levelResults
+        .where((String id) => _discovered.contains(id))
+        .length;
+    final double progress = activeWorld.levelResults.isEmpty
+        ? 1
+        : completedInWorld / activeWorld.levelResults.length;
     final List<String> discoveredSorted = _discovered.toList()
       ..sort(
           (a, b) => elementCatalog[a]!.name.compareTo(elementCatalog[b]!.name));
@@ -157,12 +173,21 @@ class _ForgeScreenState extends State<ForgeScreen> {
                     ? _ForgeMainBoard(
                         key: const ValueKey<String>('forge-board'),
                         activeLayer: activeLayer,
+                        worldTitle: activeWorld.title,
+                        currentGoal: currentGoal,
+                        goalRecipe: _currentGoalRecipe,
+                        canUndo: _lastSnapshot != null,
+                        completedInWorld: completedInWorld,
+                        totalInWorld: activeWorld.levelResults.length,
                         discoveredCount: discoveredCount,
                         totalCount: totalCount,
+                        comboCount: _missionComboCount,
+                        comboTarget: missionPlan?.totalCombinations ?? 0,
                         progress: progress,
-                        latestResult: _latestResultId == null
-                            ? null
-                            : elementCatalog[_latestResultId!],
+                        latestResult: currentGoal ??
+                            (_latestResultId == null
+                                ? null
+                                : elementCatalog[_latestResultId!]),
                         latestFlavor: _latestFlavor,
                         atlasManifest: _atlasManifest,
                         discoveredIds: discoveredSorted,
@@ -170,10 +195,10 @@ class _ForgeScreenState extends State<ForgeScreen> {
                         placed: _placed,
                         activeDragId: _activeDragId,
                         onHint: _showHint,
+                        onUndo: _undoLastAction,
                         onCollection: () =>
                             setState(() => _showCollection = true),
-                        onClearField: _clearField,
-                        onSpawn: _spawnFromDock,
+                        onResetBoard: _resetCurrentGoalBoard,
                         onPlayfieldResize: _handlePlayfieldResize,
                         onOrbPanStart: _handleOrbPanStart,
                         onOrbPanUpdate: (String instanceId,
@@ -218,16 +243,7 @@ class _ForgeScreenState extends State<ForgeScreen> {
     );
   }
 
-  String _currentLayer() {
-    int highestIndex = 0;
-    for (final String id in _discovered) {
-      final int index = layerOrder.indexOf(elementCatalog[id]!.layer);
-      if (index > highestIndex) {
-        highestIndex = index;
-      }
-    }
-    return layerOrder[highestIndex];
-  }
+  WorldDefinition get _activeWorld => worldDefinitions[_activeWorldOrder];
 
   Future<void> _loadProgress() async {
     final SharedPreferencesWithCache prefs =
@@ -259,7 +275,7 @@ class _ForgeScreenState extends State<ForgeScreen> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        _ensureOpeningBoard();
+        _prepareStoryGoal(reseedBoard: true, forceMessage: true);
       }
     });
   }
@@ -298,25 +314,6 @@ class _ForgeScreenState extends State<ForgeScreen> {
         _atlasManifest = null;
       });
     }
-  }
-
-  void _spawnFromDock(String elementId) {
-    final RenderBox? box =
-        _playfieldKey.currentContext?.findRenderObject() as RenderBox?;
-    final Size size = box?.size ?? const Size(340, 420);
-    final math.Random random = math.Random();
-    final double x = size.width * (0.24 + random.nextDouble() * 0.52);
-    final double y = size.height * (0.18 + random.nextDouble() * 0.54);
-
-    setState(() {
-      _placed.add(
-        PlacedElement(
-          instanceId: 'orb-${_nextInstanceId++}',
-          elementId: elementId,
-          position: _clampOffset(Offset(x, y), size),
-        ),
-      );
-    });
   }
 
   void _handleOrbPanStart(String instanceId) {
@@ -397,6 +394,9 @@ class _ForgeScreenState extends State<ForgeScreen> {
       (first.position.dy + closest.position.dy) / 2,
     );
     final bool isNew = !_discovered.contains(resultId);
+    final bool completesGoal = resultId == _currentGoalId;
+    final Recipe? completedRecipe = _currentGoalRecipe;
+    _captureSnapshot();
 
     setState(() {
       _placed.removeWhere(
@@ -414,9 +414,19 @@ class _ForgeScreenState extends State<ForgeScreen> {
       _discovered.add(resultId);
       _latestResultId = resultId;
       _latestFlavor = elementCatalog[resultId]!.flavor;
+      _missionComboCount += 1;
     });
 
     _saveProgress();
+
+    if (completesGoal && completedRecipe != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _showMissionSuccessDialog(resultId, completedRecipe);
+        }
+      });
+      return;
+    }
 
     if (isNew) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -512,31 +522,44 @@ class _ForgeScreenState extends State<ForgeScreen> {
   }
 
   void _showHint() {
-    for (final Recipe recipe in recipes) {
-      final bool hasIngredients = _discovered.contains(recipe.first) &&
-          _discovered.contains(recipe.second);
-      final bool hasResult = _discovered.contains(recipe.result);
-      if (hasIngredients && !hasResult) {
-        setState(() {
-          _latestResultId = null;
-          _latestFlavor =
-              'Hint: try combining ${elementCatalog[recipe.first]!.name} with ${elementCatalog[recipe.second]!.name}.';
-        });
-        return;
-      }
+    final Recipe? recipe = _currentGoalRecipe;
+    final String? goalId = _currentGoalId;
+    if (recipe != null && goalId != null) {
+      final _MissionPlan? missionPlan = _currentMissionPlan;
+      setState(() {
+        _latestResultId = goalId;
+        _latestFlavor = missionPlan == null
+            ? 'Hint: merge ${elementCatalog[recipe.first]!.name} with ${elementCatalog[recipe.second]!.name} to forge ${elementCatalog[goalId]!.name}.'
+            : 'Hint: this mission needs ${missionPlan.totalCombinations} combinations. Build toward ${elementCatalog[goalId]!.name} from the seeded ingredients.';
+      });
+      return;
     }
 
     setState(() {
       _latestResultId = null;
       _latestFlavor =
-          'No hints left in this prototype. You have resolved every available recipe.';
+          'No active forge objective remains. Story route complete.';
     });
   }
 
-  void _clearField() {
+  void _resetCurrentGoalBoard() {
+    final _MissionPlan? missionPlan = _currentMissionPlan;
+    if (missionPlan == null) {
+      return;
+    }
+    final RenderBox? box =
+        _playfieldKey.currentContext?.findRenderObject() as RenderBox?;
+    final Size size = box?.size ?? const Size(360, 520);
+
     setState(() {
-      _placed.clear();
+      _lastSnapshot = null;
       _activeDragId = null;
+      _missionComboCount = 0;
+      _placed
+        ..clear()
+        ..addAll(_seededMissionElements(size, missionPlan.seedElementIds));
+      _latestResultId = _currentGoalId;
+      _latestFlavor = _goalInstruction(_currentGoalRecipe, _currentGoalId);
     });
   }
 
@@ -594,61 +617,342 @@ class _ForgeScreenState extends State<ForgeScreen> {
     });
   }
 
-  void _ensureOpeningBoard() {
-    if (_placed.isNotEmpty) {
-      return;
-    }
+  void _prepareStoryGoal({
+    required bool reseedBoard,
+    bool forceMessage = false,
+  }) {
+    final WorldDefinition world = _deriveActiveWorld();
+    final String? goalId = _nextGoalForWorld(world);
+    final Recipe? recipe = goalId == null ? null : _recipeForResult(goalId);
+    final int goalIndex =
+        goalId == null ? -1 : world.levelResults.indexOf(goalId);
+    final _MissionPlan? missionPlan = goalId == null || recipe == null
+        ? null
+        : _buildMissionPlan(goalId, recipe, goalIndex);
+    final bool goalChanged =
+        goalId != _currentGoalId || world.routeOrder != _activeWorldOrder;
 
-    final RenderBox? box =
-        _playfieldKey.currentContext?.findRenderObject() as RenderBox?;
-    final Size size = box?.size ?? const Size(360, 520);
-    _seedOpeningBoard(size);
+    setState(() {
+      _activeWorldOrder = world.routeOrder;
+      _currentGoalId = goalId;
+      _currentGoalRecipe = recipe;
+      _currentMissionPlan = missionPlan;
+      _missionComboCount = 0;
+      _lastSnapshot = null;
+      if (goalId == null) {
+        _latestResultId = null;
+        _latestFlavor =
+            'Every story objective is complete. Open the collection or revisit the worlds from the route screen.';
+      } else if (goalChanged || forceMessage) {
+        _latestResultId = goalId;
+        _latestFlavor = _goalInstruction(recipe, goalId);
+      }
+    });
+
+    if (reseedBoard) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        if (recipe == null) {
+          setState(() {
+            _placed.clear();
+            _lastSnapshot = null;
+            _activeDragId = null;
+          });
+          return;
+        }
+        _resetCurrentGoalBoard();
+      });
+    }
   }
 
-  void _seedOpeningBoard(Size size) {
-    final List<_SeedOrb> seeds = <_SeedOrb>[
-      _SeedOrb(id: 'energy', xFactor: 0.23, yFactor: 0.5),
-      _SeedOrb(id: 'roboticCore', xFactor: 0.5, yFactor: 0.52),
-      _SeedOrb(id: 'signal', xFactor: 0.77, yFactor: 0.5),
-    ];
+  WorldDefinition _deriveActiveWorld() {
+    for (final WorldDefinition world in worldDefinitions) {
+      if (_nextGoalForWorld(world) != null) {
+        return world;
+      }
+    }
+    return worldDefinitions.last;
+  }
+
+  String? _nextGoalForWorld(WorldDefinition world) {
+    for (final String resultId in world.levelResults) {
+      if (!_discovered.contains(resultId)) {
+        return resultId;
+      }
+    }
+    return null;
+  }
+
+  Recipe? _recipeForResult(String resultId) {
+    for (final Recipe recipe in recipes) {
+      if (recipe.result == resultId) {
+        return recipe;
+      }
+    }
+    return null;
+  }
+
+  String _goalInstruction(Recipe? recipe, String? goalId) {
+    final _MissionPlan? missionPlan = _currentMissionPlan;
+    if (recipe == null || goalId == null || missionPlan == null) {
+      return 'No active forge goal.';
+    }
+    final int ingredientCount = missionPlan.seedElementIds.length;
+    return 'Goal: forge ${elementCatalog[goalId]!.name} using $ingredientCount seeded elements in ${missionPlan.totalCombinations} combinations.';
+  }
+
+  _MissionPlan _buildMissionPlan(String goalId, Recipe recipe, int goalIndex) {
+    if (goalIndex < 2) {
+      return _MissionPlan(
+        goalId: goalId,
+        recipe: recipe,
+        seedElementIds: <String>[recipe.first, recipe.second],
+        totalCombinations: 1,
+      );
+    }
+
+    final _MissionExpansion expansion = _expandMissionIngredients(goalId);
+    return _MissionPlan(
+      goalId: goalId,
+      recipe: recipe,
+      seedElementIds: expansion.seedElementIds,
+      totalCombinations: math.max(1, expansion.totalCombinations),
+    );
+  }
+
+  _MissionExpansion _expandMissionIngredients(String resultId) {
+    final Recipe? recipe = _recipeForResult(resultId);
+    if (recipe == null) {
+      return _MissionExpansion(
+        seedElementIds: <String>[resultId],
+        totalCombinations: 0,
+      );
+    }
+
+    final _MissionExpansion left = _expandMissionIngredients(recipe.first);
+    final _MissionExpansion right = _expandMissionIngredients(recipe.second);
+    return _MissionExpansion(
+      seedElementIds: <String>[
+        ...left.seedElementIds,
+        ...right.seedElementIds,
+      ],
+      totalCombinations: left.totalCombinations + right.totalCombinations + 1,
+    );
+  }
+
+  List<PlacedElement> _seededMissionElements(
+      Size size, List<String> elementIds) {
+    if (elementIds.isEmpty) {
+      return const <PlacedElement>[];
+    }
+
+    final int columns = elementIds.length <= 3 ? elementIds.length : 3;
+    final int rows = (elementIds.length / columns).ceil();
+    final double topY = rows == 1 ? 0.5 : 0.4;
+    final List<PlacedElement> placed = <PlacedElement>[];
+
+    for (int index = 0; index < elementIds.length; index++) {
+      final int row = index ~/ columns;
+      final int column = index % columns;
+      final int itemsInRow =
+          math.min(columns, elementIds.length - (row * columns));
+      final double xFactor = (column + 1) / (itemsInRow + 1);
+      final double yFactor = topY + (row * 0.18) - (((rows - 1) * 0.18) / 2);
+      placed.add(
+        PlacedElement(
+          instanceId: 'orb-${_nextInstanceId++}',
+          elementId: elementIds[index],
+          position: _clampOffset(
+            Offset(size.width * xFactor, size.height * yFactor),
+            size,
+          ),
+        ),
+      );
+    }
+
+    return placed;
+  }
+
+  void _captureSnapshot() {
+    _lastSnapshot = _BoardSnapshot(
+      placed: _placed
+          .map(
+            (PlacedElement orb) => orb.copyWith(
+              instanceId: orb.instanceId,
+              elementId: orb.elementId,
+              position: orb.position,
+            ),
+          )
+          .toList(growable: false),
+      discovered: Set<String>.from(_discovered),
+      nextInstanceId: _nextInstanceId,
+      latestResultId: _latestResultId,
+      latestFlavor: _latestFlavor,
+      currentGoalId: _currentGoalId,
+      activeWorldOrder: _activeWorldOrder,
+      missionComboCount: _missionComboCount,
+    );
+  }
+
+  void _undoLastAction() {
+    final _BoardSnapshot? snapshot = _lastSnapshot;
+    if (snapshot == null) {
+      return;
+    }
 
     setState(() {
       _placed
         ..clear()
-        ..addAll(
-          seeds.map(
-            (_SeedOrb seed) => PlacedElement(
-              instanceId: 'orb-${_nextInstanceId++}',
-              elementId: seed.id,
-              position: _clampOffset(
-                Offset(size.width * seed.xFactor, size.height * seed.yFactor),
-                size,
+        ..addAll(snapshot.placed);
+      _discovered
+        ..clear()
+        ..addAll(snapshot.discovered);
+      _nextInstanceId = snapshot.nextInstanceId;
+      _latestResultId = snapshot.latestResultId;
+      _latestFlavor = snapshot.latestFlavor;
+      _currentGoalId = snapshot.currentGoalId;
+      _activeWorldOrder = snapshot.activeWorldOrder;
+      _currentGoalRecipe = snapshot.currentGoalId == null
+          ? null
+          : _recipeForResult(snapshot.currentGoalId!);
+      _currentMissionPlan = snapshot.currentGoalId == null
+          ? null
+          : _buildMissionPlan(
+              snapshot.currentGoalId!,
+              _recipeForResult(snapshot.currentGoalId!)!,
+              worldDefinitions[snapshot.activeWorldOrder]
+                  .levelResults
+                  .indexOf(snapshot.currentGoalId!),
+            );
+      _missionComboCount = snapshot.missionComboCount;
+      _activeDragId = null;
+      _lastSnapshot = null;
+    });
+    _saveProgress();
+  }
+
+  void _showMissionSuccessDialog(String resultId, Recipe recipe) {
+    final ElementSpec spec = elementCatalog[resultId]!;
+    final String recipeText =
+        '${elementCatalog[recipe.first]!.name} + ${elementCatalog[recipe.second]!.name}';
+    showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Mission complete',
+      barrierColor: const Color(0xCC020812),
+      pageBuilder: (_, __, ___) {
+        return Center(
+          child: Container(
+            margin: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: const Color(0x5591FFB1)),
+              gradient: const LinearGradient(
+                colors: <Color>[Color(0xFF0A1527), Color(0xFF08111F)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                _AtlasIcon(
+                  manifest: _atlasManifest,
+                  elementId: resultId,
+                  size: 84,
+                  fallback: Text(
+                    spec.icon,
+                    style: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFFE8FBFF),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const Text(
+                  'MISSION COMPLETE',
+                  style: TextStyle(
+                    fontSize: 12,
+                    letterSpacing: 4,
+                    color: Color(0xFFAFFFD6),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  spec.name.toUpperCase(),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFFE8FBFF),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  spec.flavor,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: Color(0xFF9AC8DC),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Forged from $recipeText',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFFFFB1E8),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Completed in $_missionComboCount combinations',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFFAFFFD6),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Continue Story'),
+                ),
+              ],
             ),
           ),
         );
+      },
+    ).then((_) {
+      if (!mounted) {
+        return;
+      }
+      _prepareStoryGoal(reseedBoard: true, forceMessage: true);
     });
   }
-}
-
-class _SeedOrb {
-  const _SeedOrb({
-    required this.id,
-    required this.xFactor,
-    required this.yFactor,
-  });
-
-  final String id;
-  final double xFactor;
-  final double yFactor;
 }
 
 class _ForgeMainBoard extends StatelessWidget {
   const _ForgeMainBoard({
     super.key,
     required this.activeLayer,
+    required this.worldTitle,
+    required this.currentGoal,
+    required this.goalRecipe,
+    required this.canUndo,
+    required this.completedInWorld,
+    required this.totalInWorld,
     required this.discoveredCount,
     required this.totalCount,
+    required this.comboCount,
+    required this.comboTarget,
     required this.progress,
     required this.latestResult,
     required this.latestFlavor,
@@ -658,9 +962,9 @@ class _ForgeMainBoard extends StatelessWidget {
     required this.placed,
     required this.activeDragId,
     required this.onHint,
+    required this.onUndo,
     required this.onCollection,
-    required this.onClearField,
-    required this.onSpawn,
+    required this.onResetBoard,
     required this.onPlayfieldResize,
     required this.onOrbPanStart,
     required this.onOrbPanUpdate,
@@ -668,8 +972,16 @@ class _ForgeMainBoard extends StatelessWidget {
   });
 
   final String activeLayer;
+  final String worldTitle;
+  final ElementSpec? currentGoal;
+  final Recipe? goalRecipe;
+  final bool canUndo;
+  final int completedInWorld;
+  final int totalInWorld;
   final int discoveredCount;
   final int totalCount;
+  final int comboCount;
+  final int comboTarget;
   final double progress;
   final ElementSpec? latestResult;
   final String latestFlavor;
@@ -679,9 +991,9 @@ class _ForgeMainBoard extends StatelessWidget {
   final List<PlacedElement> placed;
   final String? activeDragId;
   final VoidCallback onHint;
+  final VoidCallback onUndo;
   final VoidCallback onCollection;
-  final VoidCallback onClearField;
-  final ValueChanged<String> onSpawn;
+  final VoidCallback onResetBoard;
   final ValueChanged<Size> onPlayfieldResize;
   final ValueChanged<String> onOrbPanStart;
   final void Function(String, DragUpdateDetails, Size) onOrbPanUpdate;
@@ -696,12 +1008,20 @@ class _ForgeMainBoard extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
       child: Column(
         children: <Widget>[
-          _TopBar(onHint: onHint, onCollection: onCollection),
+          _TopBar(
+            onHint: onHint,
+            onUndo: onUndo,
+            canUndo: canUndo,
+            onCollection: onCollection,
+          ),
           const SizedBox(height: 10),
           _StatusCard(
-            layerName: activeLayer,
+            layerName: worldTitle,
             progressText:
-                '$activeLayer - $discoveredCount / $totalCount discovered',
+                '${currentGoal?.name ?? 'Story Complete'} • $completedInWorld / $totalInWorld solved',
+            detailText: comboTarget == 0
+                ? '$discoveredCount / $totalCount total discoveries'
+                : 'Combinations $comboCount / $comboTarget',
             percentText: '${(progress * 100).round()}% COMPLETE',
             progressValue: progress,
           ),
@@ -729,16 +1049,16 @@ class _ForgeMainBoard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           _ResultCard(
-            resultName: displayResult.name,
+            eyebrow: currentGoal == null ? 'STORY COMPLETE' : 'CURRENT GOAL',
+            resultName: currentGoal?.name ?? displayResult.name,
             resultFlavor: latestFlavor,
           ),
           const SizedBox(height: 12),
           _Dock(
             atlasManifest: atlasManifest,
-            discoveredIds: discoveredIds,
-            currentLayer: activeLayer,
-            onClearField: onClearField,
-            onSpawn: onSpawn,
+            goalRecipe: goalRecipe,
+            currentGoal: currentGoal,
+            onResetBoard: onResetBoard,
           ),
         ],
       ),
@@ -749,10 +1069,14 @@ class _ForgeMainBoard extends StatelessWidget {
 class _TopBar extends StatelessWidget {
   const _TopBar({
     required this.onHint,
+    required this.onUndo,
+    required this.canUndo,
     required this.onCollection,
   });
 
   final VoidCallback onHint;
+  final VoidCallback onUndo;
+  final bool canUndo;
   final VoidCallback onCollection;
 
   @override
@@ -764,7 +1088,17 @@ class _TopBar extends StatelessWidget {
             Expanded(
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: _ChromeAction(label: 'Hint', onPressed: onHint),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: <Widget>[
+                    _ChromeAction(label: 'Hint', onPressed: onHint),
+                    _ChromeAction(
+                      label: 'Step Back',
+                      onPressed: canUndo ? onUndo : null,
+                    ),
+                  ],
+                ),
               ),
             ),
             Flexible(
@@ -1442,12 +1776,14 @@ class _StatusCard extends StatelessWidget {
   const _StatusCard({
     required this.layerName,
     required this.progressText,
+    required this.detailText,
     required this.percentText,
     required this.progressValue,
   });
 
   final String layerName;
   final String progressText;
+  final String detailText;
   final String percentText;
   final double progressValue;
 
@@ -1475,6 +1811,26 @@ class _StatusCard extends StatelessWidget {
               letterSpacing: 1.3,
               fontWeight: FontWeight.w900,
               color: Color(0xFFC7F7FF),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            progressText,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: NeonPalette.textDim,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            detailText,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: NeonPalette.textDim,
             ),
           ),
           const SizedBox(height: 8),
@@ -1603,20 +1959,21 @@ class _Playfield extends StatelessWidget {
 class _Dock extends StatelessWidget {
   const _Dock({
     required this.atlasManifest,
-    required this.discoveredIds,
-    required this.currentLayer,
-    required this.onClearField,
-    required this.onSpawn,
+    required this.goalRecipe,
+    required this.currentGoal,
+    required this.onResetBoard,
   });
 
   final AtlasManifest? atlasManifest;
-  final List<String> discoveredIds;
-  final String currentLayer;
-  final VoidCallback onClearField;
-  final ValueChanged<String> onSpawn;
+  final Recipe? goalRecipe;
+  final ElementSpec? currentGoal;
+  final VoidCallback onResetBoard;
 
   @override
   Widget build(BuildContext context) {
+    final List<String> ingredientIds = goalRecipe == null
+        ? const <String>[]
+        : <String>[goalRecipe!.first, goalRecipe!.second];
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
       decoration: BoxDecoration(
@@ -1628,30 +1985,57 @@ class _Dock extends StatelessWidget {
       ),
       child: Row(
         children: <Widget>[
-          _DockNavButton(icon: Icons.chevron_left_rounded, onPressed: () {}),
+          _DockNavButton(
+            icon: Icons.restart_alt_rounded,
+            onPressed: onResetBoard,
+          ),
           const SizedBox(width: 8),
           Expanded(
-            child: SizedBox(
-              height: 66,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: discoveredIds.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 10),
-                itemBuilder: (BuildContext context, int index) {
-                  final String id = discoveredIds[index];
-                  final ElementSpec spec = elementCatalog[id]!;
-                  return _ElementChip(
-                    atlasManifest: atlasManifest,
-                    spec: spec,
-                    highlight: spec.layer == currentLayer,
-                    onTap: () => onSpawn(id),
-                  );
-                },
+            child: ingredientIds.isEmpty
+                ? const SizedBox(
+                    height: 66,
+                    child: Center(
+                      child: Text(
+                        'All story goals complete.',
+                        style: TextStyle(color: NeonPalette.textDim),
+                      ),
+                    ),
+                  )
+                : SizedBox(
+                    height: 66,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: ingredientIds.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 10),
+                      itemBuilder: (BuildContext context, int index) {
+                        final String id = ingredientIds[index];
+                        final ElementSpec spec = elementCatalog[id]!;
+                        return _ElementChip(
+                          atlasManifest: atlasManifest,
+                          spec: spec,
+                          highlight: true,
+                          onTap: () {},
+                        );
+                      },
+                    ),
+                  ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 118,
+            child: Text(
+              currentGoal == null
+                  ? 'Route clear'
+                  : 'Forge ${currentGoal!.name}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ),
-          const SizedBox(width: 8),
-          _DockNavButton(icon: Icons.chevron_right_rounded, onPressed: () {}),
         ],
       ),
     );
@@ -1660,10 +2044,12 @@ class _Dock extends StatelessWidget {
 
 class _ResultCard extends StatelessWidget {
   const _ResultCard({
+    required this.eyebrow,
     required this.resultName,
     required this.resultFlavor,
   });
 
+  final String eyebrow;
   final String resultName;
   final String resultFlavor;
 
@@ -1686,8 +2072,8 @@ class _ResultCard extends StatelessWidget {
       ),
       child: Column(
         children: <Widget>[
-          const Text(
-            'NEW DISCOVERY',
+          Text(
+            eyebrow,
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w900,
@@ -2136,7 +2522,7 @@ class _ChromeAction extends StatelessWidget {
   });
 
   final String label;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -2148,7 +2534,11 @@ class _ChromeAction extends StatelessWidget {
         backgroundColor: const Color(0x66090F26),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(999),
-          side: const BorderSide(color: Color(0x665CF3FF)),
+          side: BorderSide(
+            color: onPressed == null
+                ? const Color(0x33495C68)
+                : const Color(0x665CF3FF),
+          ),
         ),
       ),
       child: Text(
@@ -2417,6 +2807,52 @@ class PlacedElement {
       position: position ?? this.position,
     );
   }
+}
+
+class _BoardSnapshot {
+  const _BoardSnapshot({
+    required this.placed,
+    required this.discovered,
+    required this.nextInstanceId,
+    required this.latestResultId,
+    required this.latestFlavor,
+    required this.currentGoalId,
+    required this.activeWorldOrder,
+    required this.missionComboCount,
+  });
+
+  final List<PlacedElement> placed;
+  final Set<String> discovered;
+  final int nextInstanceId;
+  final String? latestResultId;
+  final String latestFlavor;
+  final String? currentGoalId;
+  final int activeWorldOrder;
+  final int missionComboCount;
+}
+
+class _MissionPlan {
+  const _MissionPlan({
+    required this.goalId,
+    required this.recipe,
+    required this.seedElementIds,
+    required this.totalCombinations,
+  });
+
+  final String goalId;
+  final Recipe recipe;
+  final List<String> seedElementIds;
+  final int totalCombinations;
+}
+
+class _MissionExpansion {
+  const _MissionExpansion({
+    required this.seedElementIds,
+    required this.totalCombinations,
+  });
+
+  final List<String> seedElementIds;
+  final int totalCombinations;
 }
 
 class ElementSpec {
@@ -2891,15 +3327,15 @@ const List<RecipeTier> recipeTiers = <RecipeTier>[
     recipes: <Recipe>[
       Recipe('energy', 'code', 'program'),
       Recipe('code', 'noise', 'error'),
-      Recipe('signal', 'noise', 'static'),
-      Recipe('data', 'code', 'database'),
-      Recipe('circuit', 'energy', 'system'),
-      Recipe('light', 'signal', 'display'),
-      Recipe('time', 'data', 'log'),
-      Recipe('void', 'energy', 'pulse'),
-      Recipe('user', 'code', 'input'),
-      Recipe('signal', 'data', 'packet'),
-      Recipe('energy', 'signal', 'roboticCore'),
+      Recipe('error', 'signal', 'static'),
+      Recipe('program', 'data', 'database'),
+      Recipe('circuit', 'program', 'system'),
+      Recipe('light', 'system', 'display'),
+      Recipe('time', 'database', 'log'),
+      Recipe('void', 'system', 'pulse'),
+      Recipe('user', 'program', 'input'),
+      Recipe('signal', 'database', 'packet'),
+      Recipe('pulse', 'system', 'roboticCore'),
     ],
   ),
   RecipeTier(

@@ -13,7 +13,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('NEON FORGE'), findsOneWidget);
-    expect(find.text('NEW DISCOVERY'), findsOneWidget);
-    expect(find.text('ROBOTIC CORE'), findsWidgets);
+    expect(find.text('CURRENT GOAL'), findsOneWidget);
+    expect(find.text('PROGRAM'), findsWidgets);
+    expect(find.textContaining('Goal: forge Program'), findsOneWidget);
   });
 }

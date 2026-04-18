@@ -1,6 +1,6 @@
 {
-    "name": "neon_forge",
-    "short_name": "neon_forge",
+    "name": "NEON Forge",
+    "short_name": "NEON Forge",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

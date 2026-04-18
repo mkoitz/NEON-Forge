@@ -2074,13 +2074,13 @@ class _ResultCard extends StatelessWidget {
         children: <Widget>[
           Text(
             eyebrow,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w900,
               letterSpacing: 1.4,
               color: Color(0xFFFF90D9),
               shadows: <Shadow>[
-                Shadow(color: Color(0xAAFF5FD4), blurRadius: 12)
+                Shadow(color: Color(0xAAFF5FD4), blurRadius: 12),
               ],
             ),
           ),
@@ -2264,16 +2264,14 @@ class _CollectionOverlay extends StatelessWidget {
 class _GlassPanel extends StatelessWidget {
   const _GlassPanel({
     required this.child,
-    this.padding = const EdgeInsets.all(16),
   });
 
   final Widget child;
-  final EdgeInsets padding;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: padding,
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),
         border: Border.all(color: NeonPalette.stroke),
